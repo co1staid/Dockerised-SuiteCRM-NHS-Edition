@@ -1,0 +1,43 @@
+FROM php:7.1.10-apache
+
+ENV DOWNLOAD_URL DOWNLOAD_URL https://codeload.github.com/AppertaFoundation/SuiteCRM-NHS-Edition/zip/master/
+ENV DOWNLOAD_FILE SuiteCRM-NHS-Edition-master.zip
+ENV EXTRACT_FOLDER SuiteCRM-7.9.7
+ENV WWW_FOLDER /var/www/html
+ENV WWW_USER www-data
+ENV WWW_GROUP www-data
+
+RUN apt-get update && apt-get upgrade -y && \
+    apt-get install -y libcurl4-gnutls-dev libpng-dev libmcrypt-dev libssl-dev libc-client2007e-dev libkrb5-dev unzip cron re2c python tree wget && \
+    docker-php-ext-configure imap --with-imap-ssl --with-kerberos && \
+    docker-php-ext-install pdo_mysql mysqli curl gd zip mbstring mcrypt imap && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN apt-get clean
+
+WORKDIR /tmp
+
+RUN curl -L -o ${DOWNLOAD_FILE} ${DOWNLOAD_URL}
+RUN unzip $DOWNLOAD_FILE
+RUN rm $DOWNLOAD_FILE
+RUN rm -rf ${WWW_FOLDER}/*
+RUN cp -R ${EXTRACT_FOLDER}/* ${WWW_FOLDER}/
+RUN chown -R ${WWW_USER}:${WWW_GROUP} ${WWW_FOLDER}/*
+RUN chown -R ${WWW_USER}:${WWW_GROUP} ${WWW_FOLDER}
+
+COPY php.ini /usr/local/etc/php/php.ini
+COPY config_override.php.pyt /usr/local/src/config_override.php.pyt
+COPY envtemplate.py /usr/local/bin/envtemplate.py
+COPY init.sh /usr/local/bin/init.sh
+COPY config.php ${WWW_FOLDER}
+RUN chown -R ${WWW_USER}:${WWW_GROUP} ${WWW_FOLDER}/config.php
+RUN chmod 766 ${WWW_FOLDER}/config.php
+
+RUN chmod u+x /usr/local/bin/init.sh
+RUN chmod u+x /usr/local/bin/envtemplate.py
+
+ADD crons.conf /root/crons.conf
+RUN crontab /root/crons.conf
+
+EXPOSE 80
+ENTRYPOINT ["/usr/local/bin/init.sh"]
